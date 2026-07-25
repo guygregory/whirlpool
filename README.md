@@ -3,6 +3,11 @@
 A tiny full-screen water toy for phones. Hold the two buttons to squirt water in
 opposing directions; hold both and the water spins up into a whirlpool.
 
+- The two jets sit in lanes just inside the walls that run along the long edge
+  of the screen, each firing along its wall and starting upstream so the stream
+  gets a whole side and corner of runway. They are placed point-symmetrically
+  about the centre, so together they form a pure couple and the entire basin
+  turns as one vortex rather than breaking into counter-rotating eddies.
 - 2D top-down fluid: a coarse velocity grid (forces → viscosity → vorticity
   confinement → pressure projection → semi-Lagrangian advection) drives ~2400
   particles that make the flow visible. A density pass quietly recycles a few

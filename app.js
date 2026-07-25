@@ -138,10 +138,23 @@
   function applyForces(dt) {
     var s = JET * dt;
     var r = Math.min(W, H) * 0.13;
-    // Two opposing streams, offset either side of the middle: on their own
-    // they push the water across, together they spin the whole basin.
-    if (jetLeft) addJet(CELL * 2, H * 0.70, 1, 0, s, r);
-    if (jetRight) addJet(W - CELL * 2, H * 0.30, -1, 0, s, r);
+    // Two opposing streams placed on the ring the water wants to travel on.
+    // Each one sits in a lane just inside a wall running along the long axis
+    // and fires *along* that wall, starting upstream so the stream has a full
+    // side and corner of runway before it meets the other jet. Point-symmetric
+    // about the centre, so the pair is a pure couple: nothing cancels, and the
+    // whole basin turns instead of just sloshing across.
+    var LANE = 0.16;   // distance from the wall, as a fraction of the short side
+    var UP = 0.32;     // how far upstream along the wall each jet starts
+    if (H >= W) {
+      // portrait: the long walls are the sides, so the jets blow up and down
+      if (jetLeft) addJet(W * LANE, H * UP, 0, 1, s, r);
+      if (jetRight) addJet(W * (1 - LANE), H * (1 - UP), 0, -1, s, r);
+    } else {
+      // landscape: the long walls are the top and bottom
+      if (jetLeft) addJet(W * UP, H * (1 - LANE), 1, 0, s, r);
+      if (jetRight) addJet(W * (1 - UP), H * LANE, -1, 0, s, r);
+    }
 
     // Gyroscope tilt - a gentle secondary drift.
     if (tiltX || tiltY) {
