@@ -5,7 +5,9 @@ opposing directions; hold both and the water spins up into a whirlpool.
 
 - 2D top-down fluid: a coarse velocity grid (forces → viscosity → vorticity
   confinement → pressure projection → semi-Lagrangian advection) drives ~2400
-  particles that make the flow visible.
+  particles that make the flow visible. A density pass quietly recycles a few
+  particles per frame from crowded streams into the areas the flow has emptied,
+  so the whole screen stays evenly sprinkled and the swirl reads clearly.
 - Multi-touch: both jets can be held at once, and you can also stir the water
   with a finger anywhere on screen.
 - Gyroscope (optional extra): on iOS, tap **Tilt** once to allow motion access,
