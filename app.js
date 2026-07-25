@@ -22,7 +22,17 @@
   // --- particles ------------------------------------------------------
   var MAX_PARTICLES = 2400;
   var count = 0;
-  var px, py, pvx, pvy, phue;
+  var px, py, pvx, pvy, phue, pfade;
+
+  // --- density balancing ----------------------------------------------
+  // The flow sweeps tracers out of the quiet areas between the jets, which
+  // leaves bald patches and hides the swirl. Every frame we count particles
+  // in coarse bins and quietly recycle a few from the most crowded bins into
+  // the emptiest ones, so the whole screen keeps a roughly even sprinkling.
+  var BIN = 46;             // density bin size in CSS pixels
+  var RECYCLE_RATE = 0.02;  // fraction of the cloud that may move per frame
+  var FADE_IN = 4;          // fade speed of a recycled particle (per second)
+  var bnx = 0, bny = 0, bins, sparse, sparseCount = 0;
 
   // --- input ----------------------------------------------------------
   var jetLeft = false, jetRight = false;
@@ -48,6 +58,7 @@
     pvx = new Float32Array(MAX_PARTICLES);
     pvy = new Float32Array(MAX_PARTICLES);
     phue = new Float32Array(MAX_PARTICLES);
+    pfade = new Float32Array(MAX_PARTICLES);
     count = MAX_PARTICLES;
     for (var i = 0; i < count; i++) placeParticle(i, true);
   }
@@ -59,6 +70,7 @@
     pvx[i] = 0;
     pvy[i] = 0;
     phue[i] = 172 + Math.random() * 48;
+    pfade[i] = 1;
   }
 
   function resize() {
@@ -77,6 +89,11 @@
     nx = Math.max(6, Math.ceil(W / CELL) + 2);
     ny = Math.max(6, Math.ceil(H / CELL) + 2);
     alloc();
+    bnx = Math.max(1, Math.ceil(W / BIN));
+    bny = Math.max(1, Math.ceil(H / BIN));
+    bins = new Int32Array(bnx * bny);
+    sparse = new Int32Array(bnx * bny);
+    sparseCount = 0;
     if (!px) seedParticles(); else clampParticles();
   }
 
@@ -259,6 +276,53 @@
       else if (y > hiY) { y = hiY; vy = -Math.abs(vy) * 0.3; }
 
       px[k] = x; py[k] = y; pvx[k] = vx; pvy[k] = vy;
+      if (pfade[k] < 1) {
+        var f = pfade[k] + FADE_IN * dt;
+        pfade[k] = f > 1 ? 1 : f;
+      }
+    }
+  }
+
+  function binOf(x, y) {
+    var i = (x / BIN) | 0, j = (y / BIN) | 0;
+    if (i < 0) i = 0; else if (i > bnx - 1) i = bnx - 1;
+    if (j < 0) j = 0; else if (j > bny - 1) j = bny - 1;
+    return j * bnx + i;
+  }
+
+  // Move a few particles per frame out of the crowded streams and into the
+  // areas the flow has emptied, so every part of the screen keeps tracers.
+  function balanceDensity() {
+    var nb = bnx * bny, b, k;
+    for (b = 0; b < nb; b++) bins[b] = 0;
+    for (k = 0; k < count; k++) bins[binOf(px[k], py[k])]++;
+
+    var target = count / nb;
+    var lean = target * 0.6, crowded = target * 1.4;
+    sparseCount = 0;
+    for (b = 0; b < nb; b++) if (bins[b] < lean) sparse[sparseCount++] = b;
+    if (!sparseCount) return;
+
+    var budget = Math.max(1, Math.round(count * RECYCLE_RATE));
+    var tries = budget * 8, moved = 0;
+    for (var t = 0; t < tries && moved < budget; t++) {
+      k = (Math.random() * count) | 0;
+      var from = binOf(px[k], py[k]);
+      if (bins[from] <= crowded) continue;
+      var to = sparse[(Math.random() * sparseCount) | 0];
+      if (bins[to] >= target) continue;
+
+      bins[from]--; bins[to]++;
+      var bi = to % bnx, bj = (to / bnx) | 0;
+      var x = bi * BIN + Math.random() * BIN;
+      var y = bj * BIN + Math.random() * BIN;
+      px[k] = Math.min(Math.max(x, 1.5), W - 1.5);
+      py[k] = Math.min(Math.max(y, 1.5), H - 1.5);
+      // start with the local flow so the tracer joins in instead of stalling
+      pvx[k] = sample(u, px[k] / CELL, py[k] / CELL);
+      pvy[k] = sample(v, px[k] / CELL, py[k] / CELL);
+      pfade[k] = 0;   // fade in, so the jump itself is invisible
+      moved++;
     }
   }
 
@@ -272,9 +336,11 @@
       var sp = Math.sqrt(pvx[k] * pvx[k] + pvy[k] * pvy[k]);
       var t = sp / 400;
       if (t > 1) t = 1;
+      ctx.globalAlpha = pfade[k];
       ctx.fillStyle = 'hsl(' + (phue[k] - t * 46) + ',95%,' + (40 + t * 45) + '%)';
       ctx.fillRect(px[k] - 1.5, py[k] - 1.5, 3, 3);
     }
+    ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
   }
 
@@ -292,6 +358,7 @@
     advectField(dt);
     project();
     moveParticles(dt);
+    balanceDensity();
     render();
     requestAnimationFrame(frame);
   }
